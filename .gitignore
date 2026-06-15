@@ -1,0 +1,33 @@
+# ==========================================
+# Archivos temporales y de estado de Terraform
+# ==========================================
+# Bloquea los archivos de estado locales (contienen credenciales en texto plano)
+*.tfstate
+*.tfstate.*
+
+# Bloquea el archivo de bloqueo de proveedores (evita conflictos de dependencias)
+.terraform.lock.hcl
+
+# Bloquea la carpeta oculta donde Terraform descarga los providers (.exe, plugins)
+.terraform/
+
+# Bloquea archivos de variables de entorno con credenciales secretas
+*.tfvars
+*.tfvars.json
+
+# Archivos de log y de inicialización
+*.log
+.terraform.rc
+terraform.rc
+
+# ==========================================
+# Configuraciones del editor (VS Code)
+# ==========================================
+.vscode/
+*.code-workspace
+
+# ==========================================
+# Archivos del sistema operativo
+# ==========================================
+Thumbs.db
+.DS_Store

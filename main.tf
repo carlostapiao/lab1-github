@@ -11,6 +11,7 @@ provider "aws" {
   region = var.region
 }
 
+# Busca la AMI más reciente de Amazon Linux 2023 (free tier)
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -23,35 +24,35 @@ data "aws_ami" "amazon_linux" {
 
 resource "aws_security_group" "ec2_sg" {
   name        = "github-actions-ec2-sg"
-  description = "SG creado desde Git hub actions"
-}
+  description = "SG creado desde GitHub Actions"
 
-ingress {
-  description = "SSH"
-  from_port   = 22
-  to_port     = 22
-  protocol    = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]
-}
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # solo para aprender; luego restringimos
+  }
 
-egress {
-  from_port   = 0
-  to_port     = 0
-  protocol    = "-1"
-  cidr_blocks = ["0.0.0.0/0"]
-}
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-tags = {
-  Name = "github-actions-sg"
+  tags = {
+    Name = "github-actions-sg"
+  }
 }
 
 resource "aws_instance" "demo" {
   ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t3.micro"
+  instance_type          = "t2.micro" # free tier
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
 
   tags = {
     Name      = "github-actions-demo"
-    ManagedBy = "Github Actions"
+    ManagedBy = "GitHubActions"
   }
 }
