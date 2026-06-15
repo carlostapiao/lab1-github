@@ -1,0 +1,33 @@
+name: Apply - Crear EC2 # Nombre de la pestaña visible en la pestaña Actions de Git hub
+
+# Configura los disparadores (triggers) del flujo de trabajo
+on:
+    push:
+        branches: [main] # Se ejecuta automaticamente al hacer push a la rama "main"
+    workflow_dispatch: # Permite ejecutar el flujo manualmente desde la interfaz web de Git hub
+
+jobs:
+    terraform-apply:
+        runs-on: ubuntu-latest # Define el sistema operativo del servidor virtual (Runner) que usara Git Hub
+
+        # Configuración de variables de entorno para la autenticación de AWS
+        env:
+            AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # Carga el ID de la llave de acceso de los secretos guardados en el repositorio
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # Carga la llave secreta desde los secrests de forma segura
+            AWS_DEFAULT_REGION: us-east-1
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4 # Paso 1: Descarga y clona el clodigo de mi respositorio dentro del servidor de Git hub actions
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3 # Paso 2: Descarga e instala el binario oficial de terraform en el entorno de ejecucion
+
+            - name: Terraform Init
+              run: terraform init
+
+            - name: Terraform Plan
+              run: terraform plan
+
+            - name: Terraform Apply
+              run: terraform apply -auto-approve

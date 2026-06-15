@@ -1,0 +1,27 @@
+name: Destroy - Eliminar EC2 # Nombre del flujo
+
+on:
+    workflow_dispatch: # Unico disparador activo: Obliga a que la ejecucion sea 100 % Manual
+
+jobs:
+    terraform-destroy:
+        runs-on: ubuntu-latest # Especifica el servidor temporal donde correra el proceso
+
+        env:
+            AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            AWS_DEFAULT_REGION: us-east-1
+
+        steps:
+            - name: Checkout
+              uses: actions/checkou@v4 # Paso 1: Baja tu codigo acrual para saber que recursos existentes debe rastrear y borrar
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3 # Paso 2: Instala el binario oficial de terraform
+
+            - name: Terraform Init
+              run: terraform init # Paso 3: Inicializa el entorno de terraform
+
+            - name: Terraform Destroy
+              run: terraform destroy -auto-approve # Paso 4: Elimina de forma definitiva todos los recursos
+
