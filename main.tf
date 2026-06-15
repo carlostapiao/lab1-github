@@ -23,7 +23,7 @@ data "aws_ami" "amazon_linux" {
 }
 
 resource "aws_security_group" "ec2_sg" {
-  name        = "github-actions-ec2-sg"
+  name        = "github-actions-ec2-sgv2"
   description = "SG creado desde GitHub Actions"
 
   ingress {
@@ -48,7 +48,7 @@ resource "aws_security_group" "ec2_sg" {
 
 resource "aws_instance" "demo" {
   ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t2.micro" # free tier
+  instance_type          = "t3.micro" # free tier
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
 
   tags = {
