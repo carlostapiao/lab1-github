@@ -68,3 +68,5 @@ resource "aws_instance" "demo" {
     ManagedBy = "GitHubActions"
   }
 }
+
+tags = { Name = "github-actions-demo", ManagedBy = "GitHubActions", Env = "prod" }

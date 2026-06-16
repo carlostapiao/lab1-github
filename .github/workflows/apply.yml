@@ -1,33 +1,93 @@
-name: Apply - Crear EC2 # Nombre de la pestaña visible en la pestaña Actions de Git hub
+name: Terraform CI/CD  # Define el nombre del flujo de trabajo en GitHub Actions
 
-# Configura los disparadores (triggers) del flujo de trabajo
-on:
-    push:
-        branches: [main] # Se ejecuta automaticamente al hacer push a la rama "main"
-    workflow_dispatch: # Permite ejecutar el flujo manualmente desde la interfaz web de Git hub
+on:                    # Bloque que define los disparadores del flujo
+  push:                # Se activa al hacer un push de código
+    branches: [main]   # Solo si el push es a la rama main
+  pull_request:        # Se activa al abrir o actualizar un Pull Request
+    branches: [main]   # Solo si el destino del PR es la rama main
 
-jobs:
-    terraform-apply:
-        runs-on: ubuntu-latest # Define el sistema operativo del servidor virtual (Runner) que usara Git Hub
+permissions:           # Configura los permisos del token GITHUB_TOKEN
+  contents: read       # Permiso para leer el código del repositorio
+  pull-requests: write # Permiso para escribir comentarios en los Pull Requests
 
-        # Configuración de variables de entorno para la autenticación de AWS
-        env:
-            AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # Carga el ID de la llave de acceso de los secretos guardados en el repositorio
-            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # Carga la llave secreta desde los secrests de forma segura
-            AWS_DEFAULT_REGION: us-east-1
+jobs:                  # Bloque que agrupa los trabajos a ejecutar
+  # ─── JOB 1: siempre corre (en PR y en push a main) ───
+  plan:                # Define el primer trabajo llamado 'plan'
+    runs-on: ubuntu-latest # Ejecuta el trabajo en un servidor virtual Ubuntu limpio
 
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4 # Paso 1: Descarga y clona el clodigo de mi respositorio dentro del servidor de Git hub actions
+    env:               # Define variables de entorno para todo este job
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # Carga el ID de la clave de AWS desde secretos
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # Carga la clave secreta de AWS desde secretos
+      AWS_DEFAULT_REGION: us-east-1 # Define la región de AWS por defecto
 
-            - name: Setup Terraform
-              uses: hashicorp/setup-terraform@v3 # Paso 2: Descarga e instala el binario oficial de terraform en el entorno de ejecucion
+    steps:             # Lista de pasos secuenciales para el job 'plan'
+      - name: Checkout # Nombre del primer paso
+        uses: actions/checkout@v4 # Descarga el código del repositorio en el servidor
 
-            - name: Terraform Init
-              run: terraform init
+      - name: Setup Terraform # Nombre del segundo paso
+        uses: hashicorp/setup-terraform@v3 # Instala la herramienta Terraform en el servidor
 
-            - name: Terraform Plan
-              run: terraform plan
+      - name: Terraform Init # Nombre del tercer paso
+        run: terraform init # Inicializa el directorio de Terraform (descarga proveedores/módulos)
 
-            - name: Terraform Apply
-              run: terraform apply -auto-approve
+      - name: Terraform Plan # Nombre del cuarto paso
+        id: plan       # Identificador único para este paso (permite referenciarlo)
+        run: terraform plan -no-color 2>&1 | tee plan_output.txt # Ejecuta el plan sin color y guarda la salida en un archivo de texto
+        continue-on-error: true # Si este paso falla, permite que el flujo continúe en lugar de detenerse
+
+      - name: Comentar Plan en PR # Nombre del quinto paso
+        if: github.event_name == 'pull_request' # Se ejecuta únicamente si el disparador fue un Pull Request
+        uses: actions/github-script@v7 # Usa una acción para ejecutar código de JavaScript
+        with:          # Define los parámetros para la acción de JavaScript
+          script: |    # Inicio del script en JavaScript
+            const fs = require('fs'); # Importa el módulo para leer archivos del sistema
+            const plan = fs.readFileSync('plan_output.txt', 'utf8'); # Lee el archivo con la salida del plan de Terraform
+            const truncated = plan.length > 60000 ? plan.slice(0, 60000) + '\n... (truncado)' : plan; # Recorta el texto si supera los 60,000 caracteres
+            github.rest.issues.createComment({ # Llama a la API de GitHub para crear un comentario
+              issue_number: context.issue.number, # Usa el número del Pull Request actual
+              owner: context.repo.owner, # Usa el dueño del repositorio actual
+              repo: context.repo.repo, # Usa el nombre del repositorio actual
+              body: `## Terraform Plan\n\`\`\`hcl\n${truncated}\n\`\`\`` # Estructura el comentario en formato Markdown
+            });        # Fin de la llamada a la API
+
+      # Guarda el plan como artefacto para que el job apply lo use
+      - name: Guardar Plan # Nombre del sexto paso
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' # Se ejecuta solo si es un push directo a main
+        run: terraform plan -out=tfplan # Genera y guarda el plan binario en un archivo llamado 'tfplan'
+
+      - name: Subir artefacto # Nombre del séptimo paso
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' # Se ejecuta solo si es un push directo a main
+        uses: actions/upload-artifact@v4 # Acción para subir archivos a los servidores de GitHub
+        with:          # Parámetros para la subida
+          name: tfplan # Nombre que tendrá el paquete del artefacto en GitHub
+          path: tfplan # Ruta del archivo físico que se va a subir
+
+  # ─── JOB 2: solo corre en push a main, con gate de aprobación ───
+  apply:               # Define el segundo trabajo llamado 'apply'
+    needs: plan        # Obliga a que este job espere a que el job 'plan' termine con éxito
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Filtra para que solo corra si es un push real en main
+    runs-on: ubuntu-latest # Ejecuta el trabajo en un nuevo servidor virtual Ubuntu
+    environment: production # Vincula el job al entorno "production" de GitHub (activa la aprobación manual)
+
+    env:               # Define variables de entorno para todo este job
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # Carga las credenciales de AWS
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # Carga las credenciales de AWS
+      AWS_DEFAULT_REGION: us-east-1 # Define la región de AWS
+
+    steps:             # Lista de pasos secuenciales para el job 'apply'
+      - name: Checkout # Nombre del primer paso
+        uses: actions/checkout@v4 # Descarga el código del repositorio en este nuevo servidor
+
+      - name: Setup Terraform # Nombre del segundo paso
+        uses: hashicorp/setup-terraform@v3 # Instala Terraform en este nuevo servidor
+
+      - name: Terraform Init # Nombre del tercer paso
+        run: terraform init # Inicializa de nuevo el entorno de Terraform en esta máquina
+
+      - name: Bajar artefacto # Nombre del cuarto paso
+        uses: actions/download-artifact@v4 # Acción para descargar archivos previamente guardados en GitHub
+        with:          # Parámetros para la descarga
+          name: tfplan # Especifica el nombre del artefacto que se quiere descargar
+
+      - name: Terraform Apply # Nombre del quinto paso
+        run: terraform apply -auto-approve tfplan # Aplica los cambios en AWS usando el archivo del plan sin pedir confirmación interactiva
