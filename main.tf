@@ -5,11 +5,23 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  backend "s3" {
+    bucket = "carlos-tfstate-github-actions"
+    key = "ec2-demo/terraform.tfstate"
+    region = "us-east-1"
+    dynamodb_table = "terraform-locks"
+    encrypt = true 
+  }
 }
 
 provider "aws" {
   region = var.region
 }
+
+# Backend S3 y Dynamo DB
+
+
 
 # Busca la AMI más reciente de Amazon Linux 2023 (free tier)
 data "aws_ami" "amazon_linux" {
